@@ -43,6 +43,13 @@ struct OpenAPI_authentication_subscription_s {
     int nswo_allowed;
     bool is__5g_key_hierar_supp;
     int _5g_key_hierar_supp;
+
+    /* Open5GS vendor extension (not part of 3GPP TS 29.505): HSM-backed
+     * Milenage/5G-AKA support. See docs/open5gs-udm-hsm-milenage.md. */
+    bool is_hsm;
+    int hsm;
+    char *wrapped_k;
+    char *wrapped_opc;
 };
 
 OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_create(
@@ -67,7 +74,11 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_creat
     bool is_nswo_allowed,
     int nswo_allowed,
     bool is__5g_key_hierar_supp,
-    int _5g_key_hierar_supp
+    int _5g_key_hierar_supp,
+    bool is_hsm,
+    int hsm,
+    char *wrapped_k,
+    char *wrapped_opc
 );
 void OpenAPI_authentication_subscription_free(OpenAPI_authentication_subscription_t *authentication_subscription);
 OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_parseFromJSON(cJSON *authentication_subscriptionJSON);

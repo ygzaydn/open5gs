@@ -121,21 +121,45 @@ bool udr_nudr_dr_handle_subscription_authentication(
             AuthenticationSubscription.authentication_method =
                 OpenAPI_auth_method_5G_AKA;
 
-            ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k),
-                    k_string, sizeof(k_string));
-            AuthenticationSubscription.enc_permanent_key = k_string;
+            /* Open5GS vendor extension: HSM-backed subscriber. Never
+             * populate encPermanentKey/encOpcKey for an HSM
+             * subscriber -- only wrappedK/wrappedOpc travel to UDM.
+             * See docs/open5gs-udm-hsm-milenage.md. */
+            if (auth_info.hsm) {
+                if (auth_info.wrapped_k[0] == '\0' ||
+                    auth_info.wrapped_opc[0] == '\0') {
+                    ogs_error("[%s] HSM subscriber missing "
+                            "wrapped_k/wrapped_opc", supi);
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "Missing wrapped_k/wrapped_opc",
+                            supi, NULL));
+                    return false;
+                }
+
+                AuthenticationSubscription.is_hsm = true;
+                AuthenticationSubscription.hsm = true;
+                AuthenticationSubscription.wrapped_k = auth_info.wrapped_k;
+                AuthenticationSubscription.wrapped_opc =
+                    auth_info.wrapped_opc;
+            } else {
+                ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k),
+                        k_string, sizeof(k_string));
+                AuthenticationSubscription.enc_permanent_key = k_string;
+
+                if (!auth_info.use_opc)
+                    milenage_opc(auth_info.k, auth_info.op, auth_info.opc);
+
+                ogs_hex_to_ascii(auth_info.opc, sizeof(auth_info.opc),
+                        opc_string, sizeof(opc_string));
+                AuthenticationSubscription.enc_opc_key = opc_string;
+            }
 
             ogs_hex_to_ascii(auth_info.amf, sizeof(auth_info.amf),
                     amf_string, sizeof(amf_string));
             AuthenticationSubscription.authentication_management_field =
                     amf_string;
-
-            if (!auth_info.use_opc)
-                milenage_opc(auth_info.k, auth_info.op, auth_info.opc);
-
-            ogs_hex_to_ascii(auth_info.opc, sizeof(auth_info.opc),
-                    opc_string, sizeof(opc_string));
-            AuthenticationSubscription.enc_opc_key = opc_string;
 
             ogs_uint64_to_buffer(auth_info.sqn, OGS_SQN_LEN, sqn);
             ogs_hex_to_ascii(sqn, sizeof(sqn), sqn_string, sizeof(sqn_string));

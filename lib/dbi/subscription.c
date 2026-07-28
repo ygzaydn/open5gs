@@ -113,6 +113,24 @@ int ogs_dbi_auth_info(char *supi, ogs_dbi_auth_info_t *auth_info)
         } else if (!strcmp(key, OGS_SQN_STRING) &&
                 BSON_ITER_HOLDS_INT64(&inner_iter)) {
             auth_info->sqn = bson_iter_int64(&inner_iter);
+        } else if (!strcmp(key, OGS_HSM_STRING) &&
+                BSON_ITER_HOLDS_BOOL(&inner_iter)) {
+            auth_info->hsm = bson_iter_bool(&inner_iter);
+        } else if (!strcmp(key, OGS_WRAPPED_K_STRING) &&
+                BSON_ITER_HOLDS_UTF8(&inner_iter)) {
+            /* wrapped_k is an opaque base64 string, not hex -- copied
+             * as-is, never decoded here. Silently truncated-and-
+             * rejected (by leaving the field short of what UDM will
+             * later require) if it doesn't fit; UDM independently
+             * validates the field is present and non-empty before use. */
+            utf8 = (char *)bson_iter_utf8(&inner_iter, &length);
+            if (length < sizeof(auth_info->wrapped_k))
+                memcpy(auth_info->wrapped_k, utf8, length);
+        } else if (!strcmp(key, OGS_WRAPPED_OPC_STRING) &&
+                BSON_ITER_HOLDS_UTF8(&inner_iter)) {
+            utf8 = (char *)bson_iter_utf8(&inner_iter, &length);
+            if (length < sizeof(auth_info->wrapped_opc))
+                memcpy(auth_info->wrapped_opc, utf8, length);
         }
     }
 

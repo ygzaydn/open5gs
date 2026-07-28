@@ -177,6 +177,12 @@ bool ogs_pdu_session_id_is_valid(int psi);
 #define OGS_RAND_STRING "rand"
 #define OGS_SQN_STRING "sqn"
 
+/* Open5GS vendor extension (not part of 3GPP): HSM-backed Milenage/
+ * 5G-AKA support. See docs/open5gs-udm-hsm-milenage.md. */
+#define OGS_HSM_STRING "hsm"
+#define OGS_WRAPPED_K_STRING "wrapped_k"
+#define OGS_WRAPPED_OPC_STRING "wrapped_opc"
+
 #define OGS_MME_HOST_STRING "mme_host"
 #define OGS_MME_REALM_STRING "mme_realm"
 #define OGS_MME_TIMESTAMP_STRING "mme_timestamp"

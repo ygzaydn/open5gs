@@ -10469,6 +10469,26 @@ components:
         5gKeyHierarSupp:
           type: boolean
           default: true
+        # --- Open5GS vendor extension (not part of 3GPP TS 29.505) ---
+        # HSM-backed Milenage/5G-AKA support: when hsm is true, the UDM
+        # must use wrappedK/wrappedOpc via the configured HSM daemon
+        # instead of encPermanentKey/encOpcKey. See
+        # docs/open5gs-udm-hsm-milenage.md.
+        hsm:
+          type: boolean
+          default: false
+        wrappedK:
+          type: string
+          description: >-
+            Base64-encoded AES-KWP-wrapped K, produced by the HSM.
+            Only meaningful when hsm is true. Never plaintext key
+            material.
+        wrappedOpc:
+          type: string
+          description: >-
+            Base64-encoded AES-KWP-wrapped OPc, produced by the HSM.
+            Only meaningful when hsm is true. Never plaintext key
+            material.
 
     SequenceNumber:
       description: Contains the SQN.

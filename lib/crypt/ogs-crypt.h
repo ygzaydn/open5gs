@@ -69,6 +69,15 @@ extern "C" {
 
 #define OGS_KEYSTRLEN(x)                ((x*2)+1)
 
+/* Open5GS vendor extension (not part of 3GPP): HSM-backed Milenage/
+ * 5G-AKA support. wrapped_k/wrapped_opc are opaque, HSM-produced,
+ * base64-encoded AES-KWP-wrapped blobs -- not decoded to raw K/OPc
+ * bytes anywhere in DBI/UDR/UDM except immediately before sending
+ * them, still wrapped, to the HSM daemon. See
+ * docs/open5gs-udm-hsm-milenage.md. */
+#define OGS_MAX_WRAPPED_KEY_LEN         256
+#define OGS_MAX_WRAPPED_KEY_B64_LEN     (((OGS_MAX_WRAPPED_KEY_LEN + 2) / 3) * 4 + 1)
+
 int curve25519_donna(
         uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 

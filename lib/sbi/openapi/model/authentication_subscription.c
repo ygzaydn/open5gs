@@ -26,7 +26,11 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_creat
     bool is_nswo_allowed,
     int nswo_allowed,
     bool is__5g_key_hierar_supp,
-    int _5g_key_hierar_supp
+    int _5g_key_hierar_supp,
+    bool is_hsm,
+    int hsm,
+    char *wrapped_k,
+    char *wrapped_opc
 )
 {
     OpenAPI_authentication_subscription_t *authentication_subscription_local_var = ogs_malloc(sizeof(OpenAPI_authentication_subscription_t));
@@ -54,6 +58,10 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_creat
     authentication_subscription_local_var->nswo_allowed = nswo_allowed;
     authentication_subscription_local_var->is__5g_key_hierar_supp = is__5g_key_hierar_supp;
     authentication_subscription_local_var->_5g_key_hierar_supp = _5g_key_hierar_supp;
+    authentication_subscription_local_var->is_hsm = is_hsm;
+    authentication_subscription_local_var->hsm = hsm;
+    authentication_subscription_local_var->wrapped_k = wrapped_k;
+    authentication_subscription_local_var->wrapped_opc = wrapped_opc;
 
     return authentication_subscription_local_var;
 }
@@ -104,6 +112,14 @@ void OpenAPI_authentication_subscription_free(OpenAPI_authentication_subscriptio
     if (authentication_subscription->routing_id) {
         ogs_free(authentication_subscription->routing_id);
         authentication_subscription->routing_id = NULL;
+    }
+    if (authentication_subscription->wrapped_k) {
+        ogs_free(authentication_subscription->wrapped_k);
+        authentication_subscription->wrapped_k = NULL;
+    }
+    if (authentication_subscription->wrapped_opc) {
+        ogs_free(authentication_subscription->wrapped_opc);
+        authentication_subscription->wrapped_opc = NULL;
     }
     ogs_free(authentication_subscription);
 }
@@ -246,6 +262,27 @@ cJSON *OpenAPI_authentication_subscription_convertToJSON(OpenAPI_authentication_
     }
     }
 
+    if (authentication_subscription->is_hsm) {
+    if (cJSON_AddBoolToObject(item, "hsm", authentication_subscription->hsm) == NULL) {
+        ogs_error("OpenAPI_authentication_subscription_convertToJSON() failed [hsm]");
+        goto end;
+    }
+    }
+
+    if (authentication_subscription->wrapped_k) {
+    if (cJSON_AddStringToObject(item, "wrappedK", authentication_subscription->wrapped_k) == NULL) {
+        ogs_error("OpenAPI_authentication_subscription_convertToJSON() failed [wrapped_k]");
+        goto end;
+    }
+    }
+
+    if (authentication_subscription->wrapped_opc) {
+    if (cJSON_AddStringToObject(item, "wrappedOpc", authentication_subscription->wrapped_opc) == NULL) {
+        ogs_error("OpenAPI_authentication_subscription_convertToJSON() failed [wrapped_opc]");
+        goto end;
+    }
+    }
+
 end:
     return item;
 }
@@ -274,6 +311,9 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_parse
     cJSON *routing_id = NULL;
     cJSON *nswo_allowed = NULL;
     cJSON *_5g_key_hierar_supp = NULL;
+    cJSON *hsm = NULL;
+    cJSON *wrapped_k = NULL;
+    cJSON *wrapped_opc = NULL;
     authentication_method = cJSON_GetObjectItemCaseSensitive(authentication_subscriptionJSON, "authenticationMethod");
     if (!authentication_method) {
         ogs_error("OpenAPI_authentication_subscription_parseFromJSON() failed [authentication_method]");
@@ -415,6 +455,30 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_parse
     }
     }
 
+    hsm = cJSON_GetObjectItemCaseSensitive(authentication_subscriptionJSON, "hsm");
+    if (hsm) {
+    if (!cJSON_IsBool(hsm)) {
+        ogs_error("OpenAPI_authentication_subscription_parseFromJSON() failed [hsm]");
+        goto end;
+    }
+    }
+
+    wrapped_k = cJSON_GetObjectItemCaseSensitive(authentication_subscriptionJSON, "wrappedK");
+    if (wrapped_k) {
+    if (!cJSON_IsString(wrapped_k) && !cJSON_IsNull(wrapped_k)) {
+        ogs_error("OpenAPI_authentication_subscription_parseFromJSON() failed [wrapped_k]");
+        goto end;
+    }
+    }
+
+    wrapped_opc = cJSON_GetObjectItemCaseSensitive(authentication_subscriptionJSON, "wrappedOpc");
+    if (wrapped_opc) {
+    if (!cJSON_IsString(wrapped_opc) && !cJSON_IsNull(wrapped_opc)) {
+        ogs_error("OpenAPI_authentication_subscription_parseFromJSON() failed [wrapped_opc]");
+        goto end;
+    }
+    }
+
     authentication_subscription_local_var = OpenAPI_authentication_subscription_create (
         authentication_methodVariable,
         enc_permanent_key && !cJSON_IsNull(enc_permanent_key) ? ogs_strdup(enc_permanent_key->valuestring) : NULL,
@@ -437,7 +501,11 @@ OpenAPI_authentication_subscription_t *OpenAPI_authentication_subscription_parse
         nswo_allowed ? true : false,
         nswo_allowed ? nswo_allowed->valueint : 0,
         _5g_key_hierar_supp ? true : false,
-        _5g_key_hierar_supp ? _5g_key_hierar_supp->valueint : 0
+        _5g_key_hierar_supp ? _5g_key_hierar_supp->valueint : 0,
+        hsm ? true : false,
+        hsm ? hsm->valueint : 0,
+        wrapped_k && !cJSON_IsNull(wrapped_k) ? ogs_strdup(wrapped_k->valuestring) : NULL,
+        wrapped_opc && !cJSON_IsNull(wrapped_opc) ? ogs_strdup(wrapped_opc->valuestring) : NULL
     );
 
     return authentication_subscription_local_var;

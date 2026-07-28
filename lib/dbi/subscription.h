@@ -36,6 +36,15 @@ typedef struct ogs_dbi_auth_info_s {
     uint8_t       amf[OGS_AMF_LEN];
     uint8_t       rand[OGS_RAND_LEN];
     uint64_t      sqn;
+
+    /* Open5GS vendor extension (not part of 3GPP): HSM-backed
+     * Milenage/5G-AKA support. When hsm is true, wrapped_k/wrapped_opc
+     * (opaque base64 strings, never decoded here) are authoritative
+     * and k/opc/op above are NOT populated -- see
+     * ogs_dbi_auth_info() and docs/open5gs-udm-hsm-milenage.md. */
+    bool          hsm;
+    char          wrapped_k[OGS_MAX_WRAPPED_KEY_B64_LEN];
+    char          wrapped_opc[OGS_MAX_WRAPPED_KEY_B64_LEN];
 } ogs_dbi_auth_info_t;
 
 int ogs_dbi_auth_info(char *supi, ogs_dbi_auth_info_t *auth_info);
