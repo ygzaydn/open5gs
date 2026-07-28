@@ -1,4 +1,4 @@
-# Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
+# Copyright (C) 2019-2026 by Sukchan Lee <acetcom@gmail.com>
 
 # This file is part of Open5GS.
 
@@ -15,24 +15,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-libinc = include_directories('.')
+libhsm_sources = files('''
+    ogs-hsm.h
 
-subdir('core')
-subdir('hsm')
-subdir('third-party')
-subdir('proto')
-subdir('dbi')
-subdir('crypt')
-subdir('ipfw')
-subdir('tun')
-subdir('app')
-subdir('metrics')
-subdir('sctp')
-subdir('diameter')
-subdir('asn1c')
-subdir('ngap')
-subdir('s1ap')
-subdir('nas')
-subdir('gtp')
-subdir('pfcp')
-subdir('sbi')
+    hsm-wire.h
+    hsm-tcp.h
+
+    hsm-wire.c
+    hsm-tcp.c
+    hsm-client.c
+'''.split())
+
+libhsm_inc = include_directories('.')
+
+libhsm = library('ogshsm',
+    sources : libhsm_sources,
+    version : libogslib_version,
+    c_args : '-DOGS_HSM_COMPILATION',
+    include_directories : [libhsm_inc, libinc],
+    dependencies : [libcore_dep],
+    install : true)
+
+libhsm_dep = declare_dependency(
+    link_with : libhsm,
+    include_directories : [libhsm_inc, libinc],
+    dependencies : [libcore_dep])
