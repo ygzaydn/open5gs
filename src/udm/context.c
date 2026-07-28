@@ -17,6 +17,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ogs-hsm.h"
+
 #include "sbi-path.h"
 
 static udm_context_t self;
@@ -134,6 +136,101 @@ int udm_context_parse_config(void)
                 } else if (!strcmp(udm_key, "hnet")) {
                     rv = ogs_sbi_context_parse_hnet_config(&udm_iter);
                     if (rv != OGS_OK) return rv;
+                } else if (!strcmp(udm_key, "hsm")) {
+                    ogs_yaml_iter_t hsm_iter;
+                    ogs_hsm_config_t hsm_config;
+
+                    memset(&hsm_config, 0, sizeof(hsm_config));
+                    hsm_config.connect_timeout_ms = 2000;
+                    hsm_config.io_timeout_ms = 3000;
+                    hsm_config.max_frame_size = 8192;
+
+                    ogs_yaml_iter_recurse(&udm_iter, &hsm_iter);
+                    while (ogs_yaml_iter_next(&hsm_iter)) {
+                        const char *hsm_key = ogs_yaml_iter_key(&hsm_iter);
+                        ogs_assert(hsm_key);
+                        if (!strcmp(hsm_key, "enabled")) {
+                            hsm_config.enabled =
+                                ogs_yaml_iter_bool(&hsm_iter);
+                        } else if (!strcmp(hsm_key, "host")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) ogs_cpystrn(hsm_config.host, v,
+                                    sizeof(hsm_config.host));
+                        } else if (!strcmp(hsm_key, "port")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) hsm_config.port = atoi(v);
+                        } else if (!strcmp(hsm_key, "token_label")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) ogs_cpystrn(hsm_config.token_label, v,
+                                    sizeof(hsm_config.token_label));
+                        } else if (!strcmp(hsm_key, "master_key_label")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) ogs_cpystrn(hsm_config.master_key_label, v,
+                                    sizeof(hsm_config.master_key_label));
+                        } else if (!strcmp(hsm_key, "master_key_id")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) ogs_cpystrn(hsm_config.master_key_id, v,
+                                    sizeof(hsm_config.master_key_id));
+                        } else if (!strcmp(hsm_key, "user_pin")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            /* Never logged -- see
+                             * docs/open5gs-udm-hsm-milenage.md. */
+                            if (v) ogs_cpystrn(hsm_config.user_pin, v,
+                                    sizeof(hsm_config.user_pin));
+                        } else if (!strcmp(hsm_key, "connect_timeout_ms")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) hsm_config.connect_timeout_ms = atoi(v);
+                        } else if (!strcmp(hsm_key, "io_timeout_ms")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) hsm_config.io_timeout_ms = atoi(v);
+                        } else if (!strcmp(hsm_key, "max_frame_size")) {
+                            const char *v = ogs_yaml_iter_value(&hsm_iter);
+                            if (v) hsm_config.max_frame_size = atoi(v);
+                        } else
+                            ogs_warn("unknown key `%s`", hsm_key);
+                    }
+
+                    if (hsm_config.enabled) {
+                        if (!hsm_config.host[0]) {
+                            ogs_error("udm.hsm.enabled is true "
+                                    "but udm.hsm.host is missing");
+                            return OGS_ERROR;
+                        }
+                        if (!hsm_config.port) {
+                            ogs_error("udm.hsm.enabled is true "
+                                    "but udm.hsm.port is missing");
+                            return OGS_ERROR;
+                        }
+                        if (!hsm_config.token_label[0]) {
+                            ogs_error("udm.hsm.enabled is true "
+                                    "but udm.hsm.token_label is missing");
+                            return OGS_ERROR;
+                        }
+                        if (!hsm_config.master_key_label[0]) {
+                            ogs_error("udm.hsm.enabled is true but "
+                                    "udm.hsm.master_key_label is missing");
+                            return OGS_ERROR;
+                        }
+                        if (!hsm_config.master_key_id[0]) {
+                            ogs_error("udm.hsm.enabled is true "
+                                    "but udm.hsm.master_key_id is missing");
+                            return OGS_ERROR;
+                        }
+                        if (!hsm_config.user_pin[0]) {
+                            ogs_error("udm.hsm.enabled is true "
+                                    "but udm.hsm.user_pin is missing");
+                            return OGS_ERROR;
+                        }
+                        ogs_info("HSM support enabled "
+                                "(host=%s port=%u token_label=%s "
+                                "master_key_label=%s master_key_id=%s)",
+                                hsm_config.host, hsm_config.port,
+                                hsm_config.token_label,
+                                hsm_config.master_key_label,
+                                hsm_config.master_key_id);
+                    }
+
+                    ogs_hsm_set_config(&hsm_config);
                 } else
                     ogs_warn("unknown key `%s`", udm_key);
             }

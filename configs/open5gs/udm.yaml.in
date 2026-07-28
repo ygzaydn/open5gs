@@ -37,7 +37,49 @@ udm:
 #        - uri: http://127.0.0.10:7777
       scp:
         - uri: http://127.0.0.200:7777
+#  hsm:
+#    enabled: true
+#    host: 127.0.0.1
+#    port: 9999
+#    token_label: open5gs-milenage
+#    master_key_label: open5gs-milenage-master
+#    master_key_id: "01"
+#    user_pin: "1234"
+#    connect_timeout_ms: 2000
+#    io_timeout_ms: 3000
+#    max_frame_size: 8192
 
+################################################################################
+# HSM-backed Milenage/5G-AKA (Open5GS vendor extension, not part of 3GPP)
+################################################################################
+#  o Enables per-subscriber HSM-backed 5G-AKA vector generation. Only
+#    subscribers whose MongoDB document has security.hsm: true use this
+#    path (with wrappedK/wrappedOpc instead of K/OPc); all other
+#    subscribers keep using the existing local Milenage/KDF path
+#    unchanged. See docs/open5gs-udm-hsm-milenage.md.
+#
+#  o Plain, unauthenticated TCP to a single softhsm2-milenaged daemon --
+#    TLS/mTLS and connecting to more than one HSM are out of scope for
+#    this phase. Do not point host/port at anything you do not already
+#    trust as much as the HSM host's own process memory.
+#
+#  o user_pin is plaintext in this config file (PoC scope, matches the
+#    daemon's own --pin provisioning story) and is never written to
+#    the UDM log.
+#
+#  udm:
+#    hsm:
+#      enabled: true
+#      host: 127.0.0.1
+#      port: 9999
+#      token_label: open5gs-milenage
+#      master_key_label: open5gs-milenage-master
+#      master_key_id: "01"
+#      user_pin: "1234"
+#      connect_timeout_ms: 2000
+#      io_timeout_ms: 3000
+#      max_frame_size: 8192
+#
 ################################################################################
 # Home Network Public Key
 ################################################################################
