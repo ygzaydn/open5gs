@@ -290,6 +290,17 @@ udm:
     client:
       scp:
         - uri: http://127.0.0.200:7777
+  hsm:
+    enabled: true
+    host: 127.0.0.1
+    port: 9999
+    token_label: open5gs-milenage
+    master_key_label: open5gs-milenage-master
+    master_key_id: "01"
+    user_pin: "1234"
+    connect_timeout_ms: 2000
+    io_timeout_ms: 3000
+    max_frame_size: 8192
 
 pcf:
   sbi:
