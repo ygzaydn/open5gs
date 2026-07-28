@@ -68,6 +68,21 @@ struct udm_ue_s {
     uint8_t rand[OGS_RAND_LEN];
     uint8_t sqn[OGS_SQN_LEN];
 
+    /* Open5GS vendor extension (not part of 3GPP): HSM-backed
+     * Milenage/5G-AKA support. When is_hsm_subscriber is true, k/opc
+     * above are NOT populated/used -- wrapped_k/wrapped_opc (decoded
+     * from base64, still AES-KWP-wrapped) are sent to the HSM daemon
+     * instead. Fixed-size buffers, no dynamic allocation: cleared
+     * (memset) whenever the context is reused for the other
+     * subscriber type, and simply go out of scope with the rest of
+     * udm_ue_t when the context is released. See
+     * docs/open5gs-udm-hsm-milenage.md. */
+    bool is_hsm_subscriber;
+    uint8_t wrapped_k[OGS_MAX_WRAPPED_KEY_LEN];
+    size_t wrapped_k_len;
+    uint8_t wrapped_opc[OGS_MAX_WRAPPED_KEY_LEN];
+    size_t wrapped_opc_len;
+
     ogs_guami_t guami;
 
     OpenAPI_auth_type_e auth_type;

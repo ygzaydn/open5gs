@@ -17,6 +17,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ogs-hsm.h"
+
 #include "nudr-handler.h"
 #include "sbi-path.h"
 
@@ -121,7 +123,35 @@ bool udm_nudr_dr_handle_subscription_authentication(
 
             }
 
-            if (!AuthenticationSubscription->enc_permanent_key) {
+            /* Open5GS vendor extension: HSM-backed subscriber. Only
+             * wrappedK/wrappedOpc are required; encPermanentKey/
+             * encOpcKey are required for legacy subscribers only.
+             * Missing/false hsm always selects the legacy checks
+             * below, unchanged. See
+             * docs/open5gs-udm-hsm-milenage.md. */
+            if (AuthenticationSubscription->is_hsm &&
+                AuthenticationSubscription->hsm) {
+
+                if (!AuthenticationSubscription->wrapped_k ||
+                    !strlen(AuthenticationSubscription->wrapped_k)) {
+                    ogs_error("[%s] No wrappedK", udm_ue->suci);
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "No wrappedK", udm_ue->suci, NULL));
+                    return false;
+                }
+                if (!AuthenticationSubscription->wrapped_opc ||
+                    !strlen(AuthenticationSubscription->wrapped_opc)) {
+                    ogs_error("[%s] No wrappedOpc", udm_ue->suci);
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "No wrappedOpc", udm_ue->suci, NULL));
+                    return false;
+                }
+
+            } else if (!AuthenticationSubscription->enc_permanent_key) {
                 ogs_error("[%s] No encPermanentKey", udm_ue->suci);
                 ogs_assert(true ==
                     ogs_sbi_server_send_error(stream,
@@ -129,8 +159,7 @@ bool udm_nudr_dr_handle_subscription_authentication(
                         recvmsg, "No encPermanentKey", udm_ue->suci,
                         NULL));
                 return false;
-            }
-            if (!AuthenticationSubscription->enc_opc_key) {
+            } else if (!AuthenticationSubscription->enc_opc_key) {
                 ogs_error("[%s] No encPermanentKey", udm_ue->suci);
                 ogs_assert(true ==
                     ogs_sbi_server_send_error(stream,
@@ -168,22 +197,76 @@ bool udm_nudr_dr_handle_subscription_authentication(
             udm_ue->auth_type = OpenAPI_auth_type_5G_AKA;
 
             ogs_ascii_to_hex(
-                AuthenticationSubscription->enc_opc_key,
-                strlen(AuthenticationSubscription->enc_opc_key),
-                udm_ue->opc, sizeof(udm_ue->opc));
-            ogs_ascii_to_hex(
                 AuthenticationSubscription->authentication_management_field,
                 strlen(AuthenticationSubscription->
                     authentication_management_field),
                 udm_ue->amf, sizeof(udm_ue->amf));
             ogs_ascii_to_hex(
-                AuthenticationSubscription->enc_permanent_key,
-                strlen(AuthenticationSubscription->enc_permanent_key),
-                udm_ue->k, sizeof(udm_ue->k));
-            ogs_ascii_to_hex(
                 AuthenticationSubscription->sequence_number->sqn,
                 strlen(AuthenticationSubscription->sequence_number->sqn),
                 udm_ue->sqn, sizeof(udm_ue->sqn));
+
+            if (AuthenticationSubscription->is_hsm &&
+                AuthenticationSubscription->hsm) {
+                int decoded;
+
+                udm_ue->is_hsm_subscriber = true;
+
+                /* Clear legacy key buffers when the context is used
+                 * for an HSM subscriber -- never leave a stale
+                 * plaintext K/OPc from a prior legacy lookup on this
+                 * same (reused) udm_ue context. */
+                memset(udm_ue->k, 0, sizeof(udm_ue->k));
+                memset(udm_ue->opc, 0, sizeof(udm_ue->opc));
+
+                decoded = ogs_base64_decode_to_buffer(
+                        udm_ue->wrapped_k, sizeof(udm_ue->wrapped_k),
+                        AuthenticationSubscription->wrapped_k);
+                if (decoded < 0) {
+                    ogs_error("[%s] Invalid wrappedK (base64 decode "
+                            "failed or too long)", udm_ue->suci);
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "Invalid wrappedK", udm_ue->suci,
+                            NULL));
+                    return false;
+                }
+                udm_ue->wrapped_k_len = (size_t)decoded;
+
+                decoded = ogs_base64_decode_to_buffer(
+                        udm_ue->wrapped_opc, sizeof(udm_ue->wrapped_opc),
+                        AuthenticationSubscription->wrapped_opc);
+                if (decoded < 0) {
+                    ogs_error("[%s] Invalid wrappedOpc (base64 decode "
+                            "failed or too long)", udm_ue->suci);
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "Invalid wrappedOpc", udm_ue->suci,
+                            NULL));
+                    return false;
+                }
+                udm_ue->wrapped_opc_len = (size_t)decoded;
+
+            } else {
+                /* Clear HSM buffers when the context is used for a
+                 * legacy subscriber. */
+                udm_ue->is_hsm_subscriber = false;
+                memset(udm_ue->wrapped_k, 0, sizeof(udm_ue->wrapped_k));
+                udm_ue->wrapped_k_len = 0;
+                memset(udm_ue->wrapped_opc, 0, sizeof(udm_ue->wrapped_opc));
+                udm_ue->wrapped_opc_len = 0;
+
+                ogs_ascii_to_hex(
+                    AuthenticationSubscription->enc_opc_key,
+                    strlen(AuthenticationSubscription->enc_opc_key),
+                    udm_ue->opc, sizeof(udm_ue->opc));
+                ogs_ascii_to_hex(
+                    AuthenticationSubscription->enc_permanent_key,
+                    strlen(AuthenticationSubscription->enc_permanent_key),
+                    udm_ue->k, sizeof(udm_ue->k));
+            }
 
         CASE(OGS_SBI_HTTP_METHOD_PATCH)
             if (recvmsg->res_status != OGS_SBI_HTTP_STATUS_OK &&
@@ -210,31 +293,71 @@ bool udm_nudr_dr_handle_subscription_authentication(
                 udm_ue->auth_type = OpenAPI_auth_type_5G_AKA;
             AuthenticationInfoResult.auth_type = udm_ue->auth_type;
 
-            ogs_random(udm_ue->rand, OGS_RAND_LEN);
-#if 0
-            OGS_HEX(tmp[step], strlen(tmp[step]), udm_ue->rand);
-#if 0
-            if (step == 0) step = 1; /* For supporting authentication failure */
-            else step = 0;
-#endif
-#endif
-
-            milenage_generate(udm_ue->opc, udm_ue->amf, udm_ue->k, udm_ue->sqn,
-                    udm_ue->rand, autn, ik, ck, ak, xres, &xres_len);
-
             ogs_assert(udm_ue->serving_network_name);
 
-            /* TS33.501 Annex A.2 : Kausf derviation function */
-            ogs_kdf_kausf(
-                    ck, ik,
-                    udm_ue->serving_network_name, autn,
-                    kausf);
+            if (udm_ue->is_hsm_subscriber) {
+                ogs_hsm_5g_av_request_t hsm_request;
+                ogs_hsm_5g_av_response_t hsm_response;
+                ogs_hsm_rv_t hsm_rv;
 
-            /* TS33.501 Annex A.4 : RES* and XRES* derivation function */
-            ogs_kdf_xres_star(
-                    ck, ik,
-                    udm_ue->serving_network_name, udm_ue->rand, xres, xres_len,
-                    xres_star);
+                ogs_info("[%s] HSM 5G-HE-AV request", udm_ue->suci);
+
+                memset(&hsm_request, 0, sizeof(hsm_request));
+                hsm_request.supi = udm_ue->supi;
+                hsm_request.wrapped_k = udm_ue->wrapped_k;
+                hsm_request.wrapped_k_len = udm_ue->wrapped_k_len;
+                hsm_request.wrapped_opc = udm_ue->wrapped_opc;
+                hsm_request.wrapped_opc_len = udm_ue->wrapped_opc_len;
+                memcpy(hsm_request.sqn, udm_ue->sqn, OGS_HSM_SQN_LEN);
+                memcpy(hsm_request.amf, udm_ue->amf, OGS_HSM_AMF_LEN);
+                hsm_request.serving_network_name =
+                    udm_ue->serving_network_name;
+
+                hsm_rv = ogs_hsm_generate_5g_he_av(&hsm_request, &hsm_response);
+                if (hsm_rv != OGS_HSM_OK) {
+                    ogs_error("[%s] HSM 5G-HE-AV failed [%s]",
+                            udm_ue->suci, ogs_hsm_rv_string(hsm_rv));
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                            recvmsg, "HSM 5G-HE-AV failed", udm_ue->suci,
+                            NULL));
+                    return false;
+                }
+
+                ogs_info("[%s] HSM 5G-HE-AV success", udm_ue->suci);
+
+                memcpy(udm_ue->rand, hsm_response.rand, OGS_RAND_LEN);
+                memcpy(autn, hsm_response.autn, OGS_AUTN_LEN);
+                memcpy(kausf, hsm_response.kausf, OGS_SHA256_DIGEST_SIZE);
+                memcpy(xres_star, hsm_response.xres_star, OGS_MAX_RES_LEN);
+
+            } else {
+                ogs_random(udm_ue->rand, OGS_RAND_LEN);
+#if 0
+                OGS_HEX(tmp[step], strlen(tmp[step]), udm_ue->rand);
+#if 0
+                if (step == 0) step = 1; /* For supporting authentication failure */
+                else step = 0;
+#endif
+#endif
+
+                milenage_generate(
+                        udm_ue->opc, udm_ue->amf, udm_ue->k, udm_ue->sqn,
+                        udm_ue->rand, autn, ik, ck, ak, xres, &xres_len);
+
+                /* TS33.501 Annex A.2 : Kausf derviation function */
+                ogs_kdf_kausf(
+                        ck, ik,
+                        udm_ue->serving_network_name, autn,
+                        kausf);
+
+                /* TS33.501 Annex A.4 : RES* and XRES* derivation function */
+                ogs_kdf_xres_star(
+                        ck, ik,
+                        udm_ue->serving_network_name, udm_ue->rand, xres,
+                        xres_len, xres_star);
+            }
 
             memset(&AuthenticationVector, 0, sizeof(AuthenticationVector));
             AuthenticationVector.av_type = OpenAPI_av_type_5G_HE_AKA;

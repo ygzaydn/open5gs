@@ -17,6 +17,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ogs-hsm.h"
+
 #include "sbi-path.h"
 #include "nnrf-handler.h"
 #include "nudm-handler.h"
@@ -123,20 +125,55 @@ bool udm_nudm_ueau_handle_get(
             return false;
         }
 
-        ogs_auc_sqn(udm_ue->opc, udm_ue->k, rand, auts, sqn_ms, mac_s);
+        if (udm_ue->is_hsm_subscriber) {
+            ogs_hsm_resync_request_t hsm_request;
+            ogs_hsm_rv_t hsm_rv;
 
-        if (memcmp(auts + OGS_SQN_LEN, mac_s, OGS_MAC_S_LEN) != 0) {
-            ogs_error("[%s] Re-synch MAC failed", udm_ue->suci);
-            ogs_log_print(OGS_LOG_ERROR, "[MAC_S] ");
-            ogs_log_hexdump(OGS_LOG_ERROR, mac_s, OGS_MAC_S_LEN);
-            ogs_log_hexdump(OGS_LOG_ERROR, auts + OGS_SQN_LEN, OGS_MAC_S_LEN);
-            ogs_log_hexdump(OGS_LOG_ERROR, sqn_ms, OGS_SQN_LEN);
-            ogs_assert(true ==
-                ogs_sbi_server_send_error(stream,
-                    OGS_SBI_HTTP_STATUS_UNAUTHORIZED,
-                    recvmsg, "Re-sync MAC failed", udm_ue->suci, NULL));
-            return false;
+            ogs_info("[%s] HSM resync request", udm_ue->suci);
 
+            memset(&hsm_request, 0, sizeof(hsm_request));
+            hsm_request.supi = udm_ue->supi;
+            hsm_request.wrapped_k = udm_ue->wrapped_k;
+            hsm_request.wrapped_k_len = udm_ue->wrapped_k_len;
+            hsm_request.wrapped_opc = udm_ue->wrapped_opc;
+            hsm_request.wrapped_opc_len = udm_ue->wrapped_opc_len;
+            memcpy(hsm_request.rand, rand, OGS_HSM_RAND_LEN);
+            memcpy(hsm_request.auts, auts, OGS_HSM_AUTS_LEN);
+
+            /* HSM validates the resync MAC-S internally and returns
+             * SQN_MS directly -- no local ogs_auc_sqn()/MAC-S check
+             * for HSM subscribers (the HSM never releases K/OPc, so
+             * it is the only party able to compute that MAC). */
+            hsm_rv = ogs_hsm_resynchronize(&hsm_request, sqn_ms);
+            if (hsm_rv != OGS_HSM_OK) {
+                ogs_error("[%s] HSM resync failed [%s]",
+                        udm_ue->suci, ogs_hsm_rv_string(hsm_rv));
+                ogs_assert(true ==
+                    ogs_sbi_server_send_error(stream,
+                        OGS_SBI_HTTP_STATUS_UNAUTHORIZED,
+                        recvmsg, "HSM resync failed", udm_ue->suci, NULL));
+                return false;
+            }
+
+            ogs_info("[%s] HSM resync success", udm_ue->suci);
+
+        } else {
+            ogs_auc_sqn(udm_ue->opc, udm_ue->k, rand, auts, sqn_ms, mac_s);
+
+            if (memcmp(auts + OGS_SQN_LEN, mac_s, OGS_MAC_S_LEN) != 0) {
+                ogs_error("[%s] Re-synch MAC failed", udm_ue->suci);
+                ogs_log_print(OGS_LOG_ERROR, "[MAC_S] ");
+                ogs_log_hexdump(OGS_LOG_ERROR, mac_s, OGS_MAC_S_LEN);
+                ogs_log_hexdump(
+                        OGS_LOG_ERROR, auts + OGS_SQN_LEN, OGS_MAC_S_LEN);
+                ogs_log_hexdump(OGS_LOG_ERROR, sqn_ms, OGS_SQN_LEN);
+                ogs_assert(true ==
+                    ogs_sbi_server_send_error(stream,
+                        OGS_SBI_HTTP_STATUS_UNAUTHORIZED,
+                        recvmsg, "Re-sync MAC failed", udm_ue->suci, NULL));
+                return false;
+
+            }
         }
 
         sqn = ogs_buffer_to_uint64(sqn_ms, OGS_SQN_LEN);
